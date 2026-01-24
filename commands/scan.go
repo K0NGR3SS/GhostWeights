@@ -1,45 +1,69 @@
-// commands/scan.go
 package commands
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"time"
 
 	"github.com/K0NGR3SS/ghostweights/internal/aws"
 	"github.com/K0NGR3SS/ghostweights/internal/scanner"
+	"github.com/K0NGR3SS/ghostweights/internal/ui"
+	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 )
 
 var scanCmd = &cobra.Command{
 	Use:   "scan",
 	Short: "Start the Shadow AI hunt",
-	Long:  `Scans the target AWS region for EC2 instances exposing AI/ML ports (Ollama, Ray, Streamlit) and other suspicious artifacts.`,
+	Long:  `Scans the target AWS region for EC2 instances exposing AI/ML ports (Ollama, Ray, Streamlit).`,
 	Run: func(cmd *cobra.Command, args []string) {
+
 		region, _ := cmd.Flags().GetString("region")
-		
+		deep, _ := cmd.Flags().GetBool("deep")
+
+		if !cmd.Flags().Changed("region") {
+			result, _ := pterm.DefaultInteractiveTextInput.
+				WithDefaultText("us-east-1").
+				Show("Enter AWS Region to scan")
+			
+			if result != "" {
+				region = result
+			}
+		}
+
+		pterm.Println()
+		pterm.DefaultSection.Println("Phase 1: Initialization")
+
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 
-		fmt.Printf("[*] Initializing AWS Client for region: %s\n", region)
+		spinner := ui.StartSpinner("Connecting to AWS Region: " + region)
 		awsClient, err := aws.NewClient(ctx, region)
 		if err != nil {
-			fmt.Printf("Error initializing AWS client: %v\n", err)
+			spinner.Fail("Error initializing AWS client: " + err.Error())
 			os.Exit(1)
 		}
+		spinner.Success("Connected to AWS (" + region + ")")
 
-		scn := scanner.New(awsClient)
+		pterm.Println()
+		pterm.DefaultSection.Println("Phase 2: Discovery & Analysis")
+
+		spinner = ui.StartSpinner("Hunting for Shadow AI artifacts...")
+		scn := scanner.New(awsClient, deep)
 		findings, err := scn.Scan(ctx)
 		if err != nil {
-			fmt.Printf("Scan failed: %v\n", err)
+			spinner.Fail("Scan failed: " + err.Error())
 			os.Exit(1)
 		}
+		spinner.Success("Scan Complete")
 
-		fmt.Printf("[+] Scan complete. Found %d potential issues.\n", len(findings))
+		pterm.Println()
+		pterm.DefaultSection.Println("Phase 3: Final Report")
+		ui.PrintFindings(findings)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(scanCmd)
+	scanCmd.Flags().Bool("deep", false, "Enable Deep Scan using AWS SSM")
 }
