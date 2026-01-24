@@ -57,25 +57,25 @@ go run ./cmd/ghostweights --help
 
 ### Show help
 ```bash
-go run ./cmd/ghostweights –help
+go run ./cmd/ghostweights –-help
 ```
 ### Scan (interactive region prompt)
-#### Runs a scan and prompts for AWS Region if you don’t pass –region
+#### Runs a scan and prompts for AWS Region if you don’t pass –-region
 ```bash
 go run ./cmd/ghostweights scan
 ```
 ### Scan a specific region (non-interactive)
 ```bash
-go run ./cmd/ghostweights scan –region eu-west-1
+go run ./cmd/ghostweights scan –-region eu-west-1
 ```
 ### Deep scan (SSM process hunting)
 #### Enables AWS SSM inspection of running processes (requires SSM Agent + permissions like ssm:SendCommand on targets).
 ```bash
-go run ./cmd/ghostweights scan –deep
+go run ./cmd/ghostweights scan –-deep
 ```
 ### Deep scan in a specific region (recommended for CI)
 ```bash
-go run ./cmd/ghostweights scan –region eu-west-1 –deep
+go run ./cmd/ghostweights scan –-region eu-west-1 –-deep
 ```
 ## Generate shell autocompletion
 ### zsh
