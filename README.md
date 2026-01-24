@@ -1,7 +1,7 @@
 # GhostWeights
 **The Open Source Shadow AI Discovery Tool for AWS**
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.0-blue)
 ![Go Version](https://img.shields.io/badge/go-1.24+-00ADD8?style=flat&logo=go)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Category](https://img.shields.io/badge/Security-Pentesting-red)
