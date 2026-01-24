@@ -17,16 +17,17 @@ var scanCmd = &cobra.Command{
 	Short: "Start the Shadow AI hunt",
 	Long:  `Scans the target AWS region for EC2 instances exposing AI/ML ports (Ollama, Ray, Streamlit).`,
 	Run: func(cmd *cobra.Command, args []string) {
-
 		region, _ := cmd.Flags().GetString("region")
 		deep, _ := cmd.Flags().GetBool("deep")
 
-		if !cmd.Flags().Changed("region") {
+		if region == "" {
 			result, _ := pterm.DefaultInteractiveTextInput.
 				WithDefaultText("us-east-1").
 				Show("Enter AWS Region to scan")
-			
-			if result != "" {
+
+			if result == "" {
+				region = "us-east-1"
+			} else {
 				region = result
 			}
 		}
@@ -65,5 +66,6 @@ var scanCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(scanCmd)
+	scanCmd.Flags().StringP("region", "r", "", "AWS Region to scan (e.g. eu-west-1)")
 	scanCmd.Flags().Bool("deep", false, "Enable Deep Scan using AWS SSM")
 }

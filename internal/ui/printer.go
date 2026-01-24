@@ -13,10 +13,10 @@ func PrintFindings(findings []models.Finding) {
 		return
 	}
 
-	pterm.Warning.Printf("🚨 Found %d potential issues:\n\n", len(findings))
+	pterm.Warning.Printf("Found %d potential issues:\n\n", len(findings))
 
 	data := [][]string{
-		{"Risk", "Service", "Port", "Instance ID", "Name Tag", "Public IP"},
+		{"Risk", "Service", "Port", "Instance ID", "Name Tag", "Public IP", "Evidence"},
 	}
 
 	for _, f := range findings {
@@ -27,22 +27,28 @@ func PrintFindings(findings []models.Finding) {
 		case models.RiskHigh:
 			riskStyle = pterm.FgRed.Sprint("HIGH")
 		case models.RiskMedium:
-			riskStyle = pterm.FgYellow.Sprint("MED")
+			riskStyle = pterm.FgYellow.Sprint("MEDIUM")
 		default:
 			riskStyle = pterm.FgBlue.Sprint("LOW")
+		}
+
+		portStr := "-"
+		if f.Port != 0 {
+			portStr = strconv.Itoa(int(f.Port))
 		}
 
 		data = append(data, []string{
 			riskStyle,
 			pterm.FgCyan.Sprint(f.Service),
-			strconv.Itoa(int(f.Port)),
+			portStr,
 			f.InstanceID,
 			f.NameTag,
 			f.PublicIP,
+			f.Evidence,
 		})
 	}
 
-	pterm.DefaultTable.WithHasHeader().WithData(data).Render()
+	_ = pterm.DefaultTable.WithHasHeader().WithData(data).Render()
 }
 
 func StartSpinner(text string) *pterm.SpinnerPrinter {

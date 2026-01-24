@@ -12,7 +12,7 @@ var rootCmd = &cobra.Command{
 	Short: "GhostWeights hunts for Shadow AI workloads in AWS",
 	Long:  `GhostWeights is a security tool to discover unauthorized AI/ML artifacts (Ollama, Ray, Streamlit) running in your AWS environment.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
+		_ = cmd.Help()
 	},
 }
 
@@ -25,5 +25,5 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringP("region", "r", "us-east-1", "AWS Region to scan")
+
 }
