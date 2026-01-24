@@ -98,7 +98,8 @@ go run ./cmd/ghostweights completion powershell
 ```bash
 go run ./cmd/ghostweights version
 ```
+## Legal disclaimer
 
-```text
-This tool is intended only for authorized security testing and defensive security auditing on systems you own or have explicit permission to assess. Unauthorized scanning or exploitation may be illegal; you are responsible for complying with all applicable laws, contracts, and cloud provider policies. The software is provided “as is”, without warranty, and the authors are not liable for any damages resulting from use or misuse.
-```
+This tool is intended only for authorized security testing and defensive security auditing on systems you own or have explicit permission to assess.
+Unauthorized scanning or exploitation may be illegal; you are responsible for complying with all applicable laws, contracts, and cloud provider policies.
+The software is provided "as is", without warranty, and the authors are not liable for any damages resulting from use or misuse.
