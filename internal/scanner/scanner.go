@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/K0NGR3SS/ghostweights/internal/models"
 	client "github.com/K0NGR3SS/ghostweights/internal/aws"
+	"github.com/K0NGR3SS/ghostweights/internal/models"
+	"github.com/K0NGR3SS/ghostweights/internal/ui"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/pterm/pterm"
 )
 
 var aiPorts = map[int32]string{
@@ -31,10 +33,10 @@ func New(c *client.Client, deep bool) *Scanner {
 	return &Scanner{Client: c, Deep: deep}
 }
 
-func (s *Scanner) Scan(ctx context.Context) ([]models.Finding, error) {
+func (s *Scanner) Scan(ctx context.Context, spinner *pterm.SpinnerPrinter) ([]models.Finding, error) {
 	var findings []models.Finding
 
-	fmt.Printf(" [>] Fetching EC2 instances in %s...\n", s.Client.Region)
+	ui.UpdateSpinner(spinner, fmt.Sprintf("Fetching EC2 instances in %s...", s.Client.Region))
 
 	result, err := s.Client.EC2.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
 		Filters: []types.Filter{
@@ -56,6 +58,8 @@ func (s *Scanner) Scan(ctx context.Context) ([]models.Finding, error) {
 			if instanceID == "" {
 				continue
 			}
+
+			ui.UpdateSpinner(spinner, fmt.Sprintf("Scanning network rules for %s...", instanceID))
 
 			name := getNameTag(instance.Tags)
 			publicIP := getPublicIP(instance)
@@ -119,11 +123,11 @@ func (s *Scanner) Scan(ctx context.Context) ([]models.Finding, error) {
 		}
 
 		if len(allInstanceIDs) > 0 {
-			ssmFindings, err := s.DeepScan(ctx, allInstanceIDs)
+			ssmFindings, err := s.DeepScan(ctx, allInstanceIDs, spinner)
 			if err == nil {
 				findings = append(findings, ssmFindings...)
 			} else {
-				fmt.Printf(" [!] SSM Scan skipped or failed: %v\n", err)
+				ui.UpdateSpinner(spinner, fmt.Sprintf("SSM Scan skipped: %v", err))
 			}
 		}
 	}
@@ -134,7 +138,7 @@ func (s *Scanner) Scan(ctx context.Context) ([]models.Finding, error) {
 func (s *Scanner) getSecurityGroupRules(ctx context.Context, groupID string) ([]types.IpPermission, error) {
 	res, err := s.Client.EC2.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{
 		GroupIds: []string{groupID},
-	})
+    })
 	if err != nil {
 		return nil, err
 	}

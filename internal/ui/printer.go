@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"strconv"
-
 	"github.com/K0NGR3SS/ghostweights/internal/models"
 	"github.com/pterm/pterm"
 )
@@ -15,8 +13,9 @@ func PrintFindings(findings []models.Finding) {
 
 	pterm.Warning.Printf("Found %d potential issues:\n\n", len(findings))
 
+	// Updated headers to prioritize Description (Model/GPU info) over Port/IP
 	data := [][]string{
-		{"Risk", "Service", "Port", "Instance ID", "Name Tag", "Public IP", "Evidence"},
+		{"Risk", "Service", "Instance ID", "Description", "Evidence"},
 	}
 
 	for _, f := range findings {
@@ -32,26 +31,31 @@ func PrintFindings(findings []models.Finding) {
 			riskStyle = pterm.FgBlue.Sprint("LOW")
 		}
 
-		portStr := "-"
-		if f.Port != 0 {
-			portStr = strconv.Itoa(int(f.Port))
+		// Ensure Description isn't empty (fallback to NameTag or Port if needed)
+		desc := f.Description
+		if desc == "" {
+			desc = f.NameTag
 		}
 
 		data = append(data, []string{
 			riskStyle,
 			pterm.FgCyan.Sprint(f.Service),
-			portStr,
 			f.InstanceID,
-			f.NameTag,
-			f.PublicIP,
-			f.Evidence,
+			desc,       // Now shows "Serving model: Llama-3... on GPU"
+			f.Evidence, // Shows the raw command or open port detail
 		})
 	}
 
+	// render table
 	_ = pterm.DefaultTable.WithHasHeader().WithData(data).Render()
 }
 
 func StartSpinner(text string) *pterm.SpinnerPrinter {
 	spinner, _ := pterm.DefaultSpinner.Start(text)
 	return spinner
+}
+func UpdateSpinner(spinner *pterm.SpinnerPrinter, text string) {
+    if spinner != nil {
+        spinner.UpdateText(text)
+    }
 }

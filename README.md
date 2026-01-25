@@ -4,7 +4,7 @@
 ![Version](https://img.shields.io/badge/version-1.0-blue)
 ![Go Version](https://img.shields.io/badge/go-1.24+-00ADD8?style=flat&logo=go)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Category](https://img.shields.io/badge/Security-Pentesting-red)
+![Category](https://img.shields.io/badge/Pentesting-red)
 ![Platform](https://img.shields.io/badge/Cloud-AWS-orange?logo=amazon-aws)
 
 ## What is GhostWeights?
@@ -23,8 +23,11 @@ GhostWeights scans your infrastructure to find these artifacts before attackers 
   - `8501` (Streamlit)
   - `8265` (Ray Dashboard)
   - `7860` (Gradio / HuggingFace)
-  - `8000` (vLLM)
-- **Deep Scan (Forensics):** Uses **AWS Systems Manager (SSM)** to execute commands inside instances, detecting hidden AI processes even if the firewall is closed.
+  - `8000` (vLLM / FastChat)
+- **Deep AI Scanning (SSM):** Executes forensic checks inside instances to:
+  - Detect **NVIDIA GPUs** (finds hidden training nodes).
+  - Identify running models (e.g., "Llama-3-8b") by inspecting process arguments.
+  - Find **vLLM** and **Ollama** servers running on non-standard ports.
 - **Interactive UI:** Features a modern CLI with spinners, progress tables, and interactive region selection.
 - **Risk Grading:** Automatically categorizes findings by risk level (Critical, High, Medium).
 
@@ -38,10 +41,10 @@ Phase 2: Discovery & Analysis
 
 🚨 Found 3 potential issues:
 
-Risk      Service       Port   Instance ID          Name Tag        Public IP
-CRITICAL  Ollama API    11434  i-0a1b2c3d4e5f6g7h8  gpu-worker-01   54.12.34.56
-HIGH      Ray Dashboard 8265   i-11223344556677889  ml-cluster-head 3.88.99.11
-MED       Hidden AI     0      i-99887766554433221  dev-server-tmp  N/A
+Risk      Service                 Instance ID          Description                                Evidence
+CRITICAL  Ollama API              i-0a1b2c3d4e5f6g7h8  Active Ollama API                          Port 11434 open to 0.0.0.0/0
+HIGH      vLLM Inference Server   i-11223344556677889  Serving model: Llama-3-8b on GPU (T4)      Cmd: python -m vllm.entrypoints...
+MED       Suspicious Process      i-99887766554433221  Potential AI workload                      Cmd: python3 train.py --epochs 10
 ```
 
 ## Installation

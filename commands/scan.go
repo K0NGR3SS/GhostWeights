@@ -51,7 +51,7 @@ var scanCmd = &cobra.Command{
 
 		spinner = ui.StartSpinner("Hunting for Shadow AI artifacts...")
 		scn := scanner.New(awsClient, deep)
-		findings, err := scn.Scan(ctx)
+		findings, err := scn.Scan(ctx, spinner)
 		if err != nil {
 			spinner.Fail("Scan failed: " + err.Error())
 			os.Exit(1)
