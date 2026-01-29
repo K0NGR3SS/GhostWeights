@@ -4,14 +4,16 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 )
 
 type Client struct {
-	EC2 *ec2.Client
-	SSM *ssm.Client
+	Config aws.Config
+	EC2    *ec2.Client
+	SSM    *ssm.Client
 	Region string
 }
 
@@ -22,8 +24,9 @@ func NewClient(ctx context.Context, region string) (*Client, error) {
 	}
 
 	return &Client{
-		EC2: ec2.NewFromConfig(cfg),
-		SSM: ssm.NewFromConfig(cfg),
+		Config: cfg,
+		EC2:    ec2.NewFromConfig(cfg),
+		SSM:    ssm.NewFromConfig(cfg),
 		Region: region,
 	}, nil
 }

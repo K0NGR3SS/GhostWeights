@@ -25,20 +25,26 @@ var aiPorts = map[int32]string{
 }
 
 type Scanner struct {
-	Client *client.Client
-	Deep   bool
+	Client  *client.Client
+	Deep    bool
+	sgCache map[string][]types.IpPermission
 }
 
 func New(c *client.Client, deep bool) *Scanner {
-	return &Scanner{Client: c, Deep: deep}
+	return &Scanner{
+		Client:  c,
+		Deep:    deep,
+		sgCache: make(map[string][]types.IpPermission),
+	}
 }
 
 func (s *Scanner) Scan(ctx context.Context, spinner *pterm.SpinnerPrinter) ([]models.Finding, error) {
 	var findings []models.Finding
+	var allInstances []types.Instance
 
-	ui.UpdateSpinner(spinner, fmt.Sprintf("Fetching EC2 instances in %s...", s.Client.Region))
+	ui.UpdateSpinner(spinner, fmt.Sprintf("Fetching EC2 instances in %s (with pagination)...", s.Client.Region))
 
-	result, err := s.Client.EC2.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
+	paginator := ec2.NewDescribeInstancesPaginator(s.Client.EC2, &ec2.DescribeInstancesInput{
 		Filters: []types.Filter{
 			{
 				Name:   aws.String("instance-state-name"),
@@ -46,66 +52,90 @@ func (s *Scanner) Scan(ctx context.Context, spinner *pterm.SpinnerPrinter) ([]mo
 			},
 		},
 	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to describe instances: %w", err)
+
+	pageCount := 0
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to describe instances (page %d): %w", pageCount, err)
+		}
+		pageCount++
+
+		for _, reservation := range page.Reservations {
+			allInstances = append(allInstances, reservation.Instances...)
+		}
 	}
+
+	ui.UpdateSpinner(spinner, fmt.Sprintf("Found %d running instances across %d pages", len(allInstances), pageCount))
 
 	seen := map[string]struct{}{}
 
-	for _, reservation := range result.Reservations {
-		for _, instance := range reservation.Instances {
-			instanceID := aws.ToString(instance.InstanceId)
-			if instanceID == "" {
+	for idx, instance := range allInstances {
+		instanceID := aws.ToString(instance.InstanceId)
+		if instanceID == "" {
+			continue
+		}
+
+		ui.UpdateSpinner(spinner, fmt.Sprintf("Scanning %s (%d/%d)...", instanceID, idx+1, len(allInstances)))
+
+		name := getNameTag(instance.Tags)
+		publicIP := getPublicIP(instance)
+		privateIP := getPrivateIP(instance)
+
+		if instance.MetadataOptions != nil && instance.MetadataOptions.HttpTokens == types.HttpTokensStateOptional {
+			findings = append(findings, models.Finding{
+				InstanceID:  instanceID,
+				Region:      s.Client.Region,
+				PublicIP:    publicIP,
+				PrivateIP:   privateIP,
+				NameTag:     name,
+				Risk:        models.RiskHigh,
+				Service:     "IMDSv1 Enabled",
+				Description: "Instance allows IMDSv1 (SSRF vulnerable)",
+				Evidence:    "HttpTokens=optional allows unauthenticated metadata access",
+			})
+		}
+
+		for _, sg := range instance.SecurityGroups {
+			groupID := aws.ToString(sg.GroupId)
+			if groupID == "" {
 				continue
 			}
 
-			ui.UpdateSpinner(spinner, fmt.Sprintf("Scanning network rules for %s...", instanceID))
+			sgRules, err := s.getSecurityGroupRulesCached(ctx, groupID)
+			if err != nil {
+				log.Printf("WARNING: Failed to get rules for SG %s: %v", groupID, err)
+				continue
+			}
 
-			name := getNameTag(instance.Tags)
-			publicIP := getPublicIP(instance)
-			privateIP := getPrivateIP(instance)
-
-			for _, sg := range instance.SecurityGroups {
-				groupID := aws.ToString(sg.GroupId)
-				if groupID == "" {
+			for _, rule := range sgRules {
+				if !isPubliclyExposed(rule) {
+					continue
+				}
+				if !isTCPOrAll(rule) {
 					continue
 				}
 
-				sgRules, err := s.getSecurityGroupRules(ctx, groupID)
-				if err != nil {
-					log.Printf("Failed to get rules for SG %s: %v", groupID, err)
-					continue
-				}
-
-				for _, rule := range sgRules {
-					if !isPubliclyExposed(rule) {
-						continue
-					}
-					if !isTCPOrAll(rule) {
-						continue
-					}
-
-					for port, serviceName := range aiPorts {
-						if ruleCoversPort(rule, port) {
-							key := fmt.Sprintf("%s:%d:%s", instanceID, port, serviceName)
-							if _, ok := seen[key]; ok {
-								continue
-							}
-							seen[key] = struct{}{}
-
-							findings = append(findings, models.Finding{
-								InstanceID:  instanceID,
-								Region:      s.Client.Region,
-								PublicIP:    publicIP,
-								PrivateIP:   privateIP,
-								NameTag:     name,
-								Risk:        models.RiskHigh,
-								Service:     serviceName,
-								Port:        port,
-								Description: fmt.Sprintf("Exposed %s port", serviceName),
-								Evidence:    fmt.Sprintf("Port %d open to 0.0.0.0/0 or ::/0 in SG %s", port, groupID),
-							})
+				for port, serviceName := range aiPorts {
+					if ruleCoversPort(rule, port) {
+						key := fmt.Sprintf("%s:%d:%s", instanceID, port, serviceName)
+						if _, ok := seen[key]; ok {
+							continue
 						}
+						seen[key] = struct{}{}
+
+						findings = append(findings, models.Finding{
+							InstanceID:  instanceID,
+							Region:      s.Client.Region,
+							PublicIP:    publicIP,
+							PrivateIP:   privateIP,
+							NameTag:     name,
+							Risk:        models.RiskCritical,
+							Service:     serviceName,
+							Port:        port,
+							Description: fmt.Sprintf("Exposed %s port", serviceName),
+							Evidence:    fmt.Sprintf("Port %d open to 0.0.0.0/0 or ::/0 in SG %s", port, groupID),
+						})
 					}
 				}
 			}
@@ -114,38 +144,45 @@ func (s *Scanner) Scan(ctx context.Context, spinner *pterm.SpinnerPrinter) ([]mo
 
 	if s.Deep {
 		var allInstanceIDs []string
-		for _, r := range result.Reservations {
-			for _, i := range r.Instances {
-				if i.InstanceId != nil {
-					allInstanceIDs = append(allInstanceIDs, *i.InstanceId)
-				}
+		for _, i := range allInstances {
+			if i.InstanceId != nil {
+				allInstanceIDs = append(allInstanceIDs, *i.InstanceId)
 			}
 		}
 
 		if len(allInstanceIDs) > 0 {
 			ssmFindings, err := s.DeepScan(ctx, allInstanceIDs, spinner)
-			if err == nil {
-				findings = append(findings, ssmFindings...)
-			} else {
-				ui.UpdateSpinner(spinner, fmt.Sprintf("SSM Scan skipped: %v", err))
+			if err != nil {
+				log.Printf("WARNING: SSM Deep Scan encountered errors: %v", err)
+				ui.UpdateSpinner(spinner, fmt.Sprintf("SSM Scan completed with errors: %v", err))
 			}
+			findings = append(findings, ssmFindings...)
 		}
 	}
 
 	return findings, nil
 }
 
-func (s *Scanner) getSecurityGroupRules(ctx context.Context, groupID string) ([]types.IpPermission, error) {
+//Add caching to avoid duplicate SG queries
+func (s *Scanner) getSecurityGroupRulesCached(ctx context.Context, groupID string) ([]types.IpPermission, error) {
+	// Check cache first
+	if rules, ok := s.sgCache[groupID]; ok {
+		return rules, nil
+	}
+
 	res, err := s.Client.EC2.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{
 		GroupIds: []string{groupID},
-    })
+	})
 	if err != nil {
 		return nil, err
 	}
 	if len(res.SecurityGroups) == 0 {
 		return nil, nil
 	}
-	return res.SecurityGroups[0].IpPermissions, nil
+
+	rules := res.SecurityGroups[0].IpPermissions
+	s.sgCache[groupID] = rules
+	return rules, nil
 }
 
 func isPubliclyExposed(rule types.IpPermission) bool {
