@@ -296,4 +296,5 @@ func init() {
 	scanCmd.Flags().String("min-risk", "LOW", "Minimum risk level to show (LOW, MEDIUM, HIGH, CRITICAL)")
 	scanCmd.Flags().Bool("all-regions", false, "Scan all AWS regions")
 	scanCmd.Flags().StringSlice("exclude-ids", []string{}, "Instance IDs to exclude from scan")
+	scanCmd.Flags().Bool("s3", false, "Scan S3 buckets for AI models")
 }

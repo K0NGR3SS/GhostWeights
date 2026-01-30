@@ -50,9 +50,15 @@ if command -v nvidia-smi &> /dev/null; then
 	echo "GPU|$model"
 fi
 
-# 3. Look for AI model files on disk
-find /home /root /opt /var -name "*.safetensors" -o -name "*.gguf" -o -name "*.bin" 2>/dev/null | head -n 10 | while read file; do
-	echo "MODEL_FILE|$file"
+# 3. Look for AI model files on disk (exclude Docker and node_modules)
+find /home /root /opt /var \
+	-path "*/docker/*" -prune -o \
+	-path "*/node_modules/*" -prune -o \
+	-path "*/.git/*" -prune -o \
+	\( -name "*.safetensors" -o -name "*.gguf" -o -name "*.bin" -o -name "*.pt" -o -name "*.pth" \) \
+	-size +10M \
+	-print 2>/dev/null | head -n 10 | while read file; do
+		echo "MODEL_FILE|$file"
 done
 
 # 4. Check for Python AI packages
