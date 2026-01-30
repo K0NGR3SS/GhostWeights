@@ -1,13 +1,9 @@
-<div align="center">
-  <img src="assets/logo.png" alt="GhostWeights Logo" width="250"/>
-  
   # GhostWeights
   **Shadow AI Discovery Tool for AWS**
 
   ![Version](https://img.shields.io/badge/version-1.1-blue)
   ![Go Version](https://img.shields.io/badge/go-1.24+-00ADD8?style=flat&logo=go)
   ![License](https://img.shields.io/badge/license-MIT-green)
-</div>
 
 ## What is GhostWeights?
 
